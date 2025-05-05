@@ -1,0 +1,73 @@
+name: Deploy mdBook to GitHub Pages and Update Website
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  render-book:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup mdBook
+        uses: peaceiris/actions-mdbook@v1
+        with:
+          mdbook-version: 'latest'
+
+      - name: Build
+        run: mdbook build
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./book
+          force_orphan: true  # Use a single-commit history for the gh-pages branch
+
+  update-website:
+    needs: render-book
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.BOOK_DEPLOY_KEY }}
+
+      - name: Checkout website repository
+        uses: actions/checkout@v3
+        with:
+          # TODO: Set the target website repository.
+          repository: NEWSLabNTU/NEWSLabNTU.github.io
+          ssh-key: ${{ secrets.BOOK_DEPLOY_KEY }}
+          path: website
+
+      - name: Update Website
+        working-directory: ./website
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+
+          # TODO: Edit the commands
+          echo 'You must edit the commands in the workflow file and then remove this warning'
+          exit 1  # Remove me
+
+          # TODO: Change all occurrence of `change-me-book` to a
+          # proper name in the following commands. Meanwhile, create
+          # corresponding submodule on the website repository.
+          #
+          # Update submodule to point to the latest gh-pages
+          git submodule update --init --recursive -- change-me-book
+          cd change-me-book
+          git fetch origin gh-pages
+          git checkout gh-pages
+          cd ..
+          git add change-me-book
+          git commit -m "Update change-me-book submodule to latest version"
+          git push
